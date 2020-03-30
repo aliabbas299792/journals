@@ -101,6 +101,8 @@ You make them using the `key:value` syntax, and access using `objectX.propertyNa
 
 You can use the syntax `delete objectX.propertyName` to delete that specific property from an object.
 
+`delete` is also more than 50x slower than using 
+
 You can do `propertyName in objectX` to check if the property `propertyName` is in the object `objectX`, it evaluates to `true` or `false`.
 
 You can iterate over the properties of an object by using a `for...in` loop:
@@ -174,6 +176,152 @@ let keyValuePairArrayFromObject = Object.entries(someArray);
 console.log(keyValuePairArrayFromObject); //[["0", "a"], ["1", "b"], ["2", "c"]]
 
 ```
+
+## Object Property Types
+
+_Named data properties_ have the following:
+
+- `[[Value]]`, holds the property's value (the data itself)
+- `[[Writable]]`, holds a boolean indicating whether the value can be changed
+
+The following are specific to _named accessor functions_:
+
+- `[[Get]]`, holds the 'getter', a function that is called when a property is read
+- `[[Set]]`, holds the 'setter', a function that is called when a property is set to a value (the function receives the value as a parameter)
+
+And all properties have the following:
+
+- `[[Enumerable]]`, holds a boolean which indicates enumerability (explains why this is important below)
+
+- `[[Configurable]]`, holds a boolean which if `false`, means you cannot delete a property
+
+**If you use `Object.defineProperty(...)` to define properties, defaults are set**:
+
+|    Attribute Key | Default Value |
+| ---------------: | :------------ |
+|        [[Value]] | undefined     |
+|          [[Get]] | undefined     |
+|          [[Set]] | undefined     |
+|     [[Writable]] | false         |
+|   [[Enumerable]] | false         |
+| [[Configurable]] | false         |
+
+Which means *if you used `Object.definProperty(...)` and didn't set `[[Writable]]`, you can't modify that value*.
+
+If an object has `[[Enumerable]] = false`, then the *non-enumerable* property *won't appear in `for...in` loops and in `Object.keys(obj)`*.
+
+### Data Properties Examples
+
+```javascript
+let someObject = {};
+
+Object.defineProperty(someObject, "foo", { //set the 'foo' property of 'someObject'
+    value: 123
+});
+
+Object.defineProperty(someObject, "bar", { //set the 'bar' property of 'someObject'
+    value: 456,
+    configurable: true,
+    writable: true,
+    enumerable: true
+});
+
+//note how I used Object.defineProperty(...) twice rather than Object.defineProperties(...) once, this is just to show it exists
+
+delete someObject.foo; //false - cannot be deleted as [[Configurable]] is false by default
+
+someObject.foo = 789;
+console.log(someObject.foo); //123 - can't be modified as [[Writable]] is false by default
+
+Object.keys(someObject); //["bar"] - won't print "foo", as [[Enumerable]] is false by default
+
+someObject.bar = 789;
+console.log(someObject.bar); //789 - we set [[Writable]] to true, so we can modify it
+
+for(let key in someObject){
+    console.log(key);
+}
+//bar - won't print "foo" as someObject.foo's [[Enumerable]] is set to false
+//but prints "bar" because we set [[Enumerable]] to true for someObject.bar
+
+delete someObject.bar; //true - deletes it as we set [[Configurable]] to true
+
+Object.keys(someObject); // - won't print anything, as we deleted the only enumerable object
+
+```
+
+### Accessor Properties
+
+These are the `[[Get]]` and `[[Set]]` properties.
+
+```javascript
+let product = { _name: "smartphone" }; //setting the _name property
+
+Object.defineProperties(product, {
+    name: {
+        set: function(value) { this.name = value.replace(/ /g, "_").toUpperCase(); }, //setter function, sets _name
+		get: function() { return "🌟 "+this.name+" 🌟"; } //getter function, returns _name
+    },
+    price: {
+        value: 750
+    },
+    vat: {
+        value: 0.2
+    },
+    netPrice: {
+        get: function(){
+            return this.price * (1 + this.vat);
+        }
+    }
+});
+
+product.name = "Mobile Phone"; //sets the name
+console.log(product.name); //🌟 MOBILE_PHONE 🌟
+
+console.log(product.netPrice); //900
+
+```
+
+You can't set the `[[Set]]` and `[[Get]]` properties if you are setting `[[Writeable]]` and/or `[[Value]]`. 
+
+You also can't modify the value of the property who's `[[Set]]` property you are defining - you'll have to use some other property for that, otherwise you'll get a `RangeError`.
+
+This is because, if you do for example:
+
+```javascript
+let someObject = Object.defineProperties({}, {
+    something: {
+        set: function(someValue) { this.something = someValue; },
+		get: function() { return this.something; }
+    }
+}
+    
+```
+
+Then for the `[[Set]]` property, you're trying to set the value (which is always done using the `[[Set]]` property), inside the definition of the set property, this causes a `Maximum call stack size exceeded` error (`RangeError`), as it is recursively trying to set the value inside the description of how to set the value.
+
+And for the `[[Get]]` property, it's a similar story - you're trying to access it (which is done using the `[[Get]]` property), inside the definition of the `[[Get]]` property.
+
+And as such, you need to: 
+
+- *use a different property than the one you defined `[[Set]]` and `[[Get]]` in for setting and getting some value you want* 
+- *you need to define that property I mentioned above, before you try to use it in the `[[Set]]` and `[[Get]]` properties*
+
+So for example, like this:
+
+```javascript
+let someObject = { _something: "a bit of text" };
+
+Object.defineProperties({}, {
+    something: {
+        set: function(someValue) { this._something = someValue; },
+		get: function() { return this._something; }
+    }
+}
+
+```
+
+And now there is no `RangeError`, it would work as expected (a more complex example is the longer example at the top of this section).
 
 # Operators
 
