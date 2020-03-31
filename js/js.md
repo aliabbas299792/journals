@@ -323,6 +323,86 @@ Object.defineProperties({}, {
 
 And now there is no `RangeError`, it would work as expected (a more complex example is the longer example at the top of this section).
 
+## Prototypes
+
+The JS engine provides the `Object()` function and an anonymous object that can be accessed via `Object.prototype`.
+
+The `Object.prototype` object has many built in properties (`toString()`, `valueOf()`, etc), and a `constructor` property, which points back to the `Object()` function.
+
+*Therefore `Object.prototype.constructor == Object`.*
+
+```javascript
+function add(x, y){
+    console.log(x + y);
+}
+
+console.log(add.prototype.constructor == add); //true
+
+```
+
+If you instantiate a function (using the `new` keyword), the objects made are linked to the original function by `object.constructor`.
+
+The `[[Prototype]]` property links the prototype of the original function to the instances of that function.
+
+The link of `personA`/`personB` below to the `personMaker.prototype` object is through the `[[Prototype]]` property. 
+
+> This is called *prototype linkage*.
+
+If the `personMaker.prototype` object doesn't have a requested function, then the `[[Prototype]]` property of `personMaker.prototype` is used to get to the anonymous object, which is the prototype of the `Object()` function, and if the function isn't defined there, then the function doesn't exist.
+
+> This chain of using `[[Prototype]]` to get from one prototype to another is called the *prototype chain*.
+
+The `Object.prototype.constructor == Object`, that is, that the constructor points back to the original function, and the root `__proto__` of all JS objects is `null`, so the JS engine will no where to stop looking up the *prototype chain*.
+
+*`personA.__proto__.__proto__.__proto == null`*
+
+```javascript
+function personMaker(name){
+    this.name = name;
+}
+let personA = new personMaker("Bob");
+let personB = new personMaker("Wac");
+
+personMaker.prototype.sayHello = function() { //adds a sayHello() function to the prototype
+    console.log("Hello! My name is "+this.name+"!"); 
+}
+
+//now we can access it through personA and personB:
+personA.sayHello(); //Hello! My name is Bob!
+personB.sayHello(); //Hello! My name is Wac!
+
+//you can also conceivably add completely new properties using that method too:
+personMaker.prototype.howOldAmI = function() { //prompts the user for the age of this person if it's unset
+    if(this.age == undefined){
+        console.log("I have no idea how old I am! How old am I?");
+        this.age = prompt("How old am I?","20");
+        console.log("Oh! I'm "+this.age+" years old!");
+    }else{
+        console.log("I am "+this.age+" years old!");
+    }
+}
+
+personA.howOldAmI();
+//I have no idea how old I am! How old am I?
+//*enters age of 25 in prompt box*
+//Oh! I'm 25 years old!
+personA.howOldAmI(); //I am 25 years old!
+//same thing works for personB
+
+//and you can also add a function to the anonymous object which is the prototype of is
+
+```
+
+You can therefore have this: `personA.__proto__.__proto__ === personMaker.prototype.__proto__`, where `__proto__` is *dunder proto*.
+
+And the `Object()` function's constructor obviously must be the JS provided default `Function()` function, so `Object.constructor == Function`.
+
+And so you also have `personA.__proto__.__proto__.constructor.constructor == Function`, as the anonymous object accessed by the 2nd `__proto__` is `Object.prototype`, and the constructor of that is `Object`, and we've established the constructor of that is `Function`.
+
+## Object Patterns
+
+
+
 # Operators
 
 They are all the same as you'd expect, just to clear up though, *postfix incrementing* (`x++`) means that the value of `x` would be returned and then it'd be incremented, whereas *prefix decrementing* (`++x`) means the value of `x` would be incremented and then returned, i.e:
@@ -740,5 +820,4 @@ let setColour = colour => ({ value: colour });
 >
 > - It doesn't have its own binding of the `super` keyword (which is used to access and call functions on an object's parent)
 >
-> - And you can't use the `new.target` property with it
-
+> - And you can't use the `new.target` property with it to find if a function was used with the `new` keyword
